@@ -1,10 +1,15 @@
 module Splitters
 export train_test_split
+import ..Structures: Dataset
 using Random
 
+function train_test_split(
+    data::Dataset,
+    split::Float64,
+    reshuffle::Bool=true
+)::Tuple{Dataset,Dataset}
 
-function train_test_split(x, y, split, reshuffle=true)
-    n_obs = size(x, 1)
+    n_obs = size(data.x, 1)
     split_index = Int(floor(n_obs*split))
     indexes = 1:n_obs
 
@@ -12,12 +17,12 @@ function train_test_split(x, y, split, reshuffle=true)
         indexes = shuffle(indexes)
     end
 
-    x_train = x[1:split_index-1, :]
-    x_test = x[split_index:end, :]
-    y_train = y[1:split_index-1]
-    y_test = y[split_index:end]
+    x_train = data.x[1:split_index-1, :]
+    x_test = data.x[split_index:end, :]
+    y_train = data.y[1:split_index-1]
+    y_test = data.y[split_index:end]
 
-    return x_train, y_train, x_test, y_test
+    Dataset(x_train, y_train), Dataset(x_test, y_test)
 end
 
 

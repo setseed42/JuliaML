@@ -1,43 +1,54 @@
-include("linear_regressors.jl")
+include("LinearRegressors.jl")
+using .LinearRegressors
 using Statistics
 using Plots
 using Distributions
+using Random
 
-function make_dataset(samples, features, noise)
-    x = rand(Float32, (samples, features))
+function make_dataset(samples::Int64, features::Int64, noise::Float64)::Tuple{Array{Float64},Array{Float64, 1}}
+    x = rand(Float64, (samples, features))
     xtra = hcat(x, ones(samples))
-    w = rand(Float32, size(xtra, 2))
+    w = rand(Float64, size(xtra, 2))
     noise = rand(Uniform(-noise, noise), samples)
     return x, xtra * w + noise
 end
 
-x, y = make_dataset(1000, 10, 0.1)
+x, y = make_dataset(10000, 100, 0.1)
+println(typeof(make_dataset))
 
-# Test linear regression
-
+# Settings
 early_stopping = 1000
 learning_rate = 10 ^ -4
-batch_size = 1
-
-model = LinearRegressors.linear_regression(early_stopping, learning_rate, batch_size)
-trained_model = model(x, y)
-predictions = trained_model(x)
-plotly() # Choose the Plotly.jl backend for web interactivity
-plot(y, predictions, seriestype=:scatter, )
-gui()
-
-# Test elastic net
-
-early_stopping = 1000
-learning_rate = 10 ^ -4
-alpha = 0
-l1_ratio = 1
-batch_size = 32
+alpha = 0.1
+l1_ratio = 0.1
 degree = 1
 
-model = LinearRegressors.elastic_net(early_stopping, learning_rate, alpha, l1_ratio, batch_size, degree)
+println("Testing linear regression")
+model = LinearRegressors.linear_regression(early_stopping, learning_rate)
 trained_model = model(x, y)
 predictions = trained_model(x)
-plotly() # Choose the Plotly.jl backend for web interactivity
-plot(y, predictions, seriestype=:scatter, )
-gui()
+
+println("Testing lasso regression")
+model = lasso_regression(early_stopping, learning_rate, alpha, degree)
+trained_model = model(x, y)
+predictions = trained_model(x)
+
+println("Testing polynomial regression")
+model = polynomial_regression(early_stopping, learning_rate, degree)
+trained_model = model(x, y)
+predictions = trained_model(x)
+
+println("Testing ridge regression")
+model = ridge_regression(early_stopping, learning_rate, alpha)
+trained_model = model(x, y)
+predictions = trained_model(x)
+
+println("Testing polynomial ridge regression")
+model = polynomial_ridge_regression(early_stopping, learning_rate, alpha, degree)
+trained_model = model(x, y)
+predictions = trained_model(x)
+
+println("Testing elastic_net")
+model = elastic_net(early_stopping, learning_rate, alpha, l1_ratio, degree)
+trained_model = model(x, y)
+predictions = trained_model(x)
