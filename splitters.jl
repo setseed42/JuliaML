@@ -16,11 +16,12 @@ function train_test_split(
     if reshuffle
         indexes = shuffle(indexes)
     end
-
-    x_train = data.x[1:split_index-1, :]
-    x_test = data.x[split_index:end, :]
-    y_train = data.y[1:split_index-1]
-    y_test = data.y[split_index:end]
+    train_indexes = indexes[1:split_index-1]
+    test_indexes = indexes[split_index:end]
+    x_train = data.x[train_indexes, :]
+    x_test = data.x[test_indexes, :]
+    y_train = data.y[train_indexes]
+    y_test = data.y[test_indexes]
 
     Dataset(x_train, y_train), Dataset(x_test, y_test)
 end
