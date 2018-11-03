@@ -42,8 +42,8 @@ function divide_on_feature(x::Array{Float64}, feature_i::Int64, threshold::Float
 end
 
 function desition_tree(
-    _impurity_calculation,
-    _leaf_value_calculation,
+    impurity_calculation,
+    leaf_value_calculation,
     tree_settings = TreeSettings(2, 10^-7, typemax(Int64))::TreeSettings,
     loss=missing
     )
@@ -64,7 +64,7 @@ function desition_tree(
                     if (size(Xy1, 1) > 0) & (size(Xy2, 1) > 0)
                         y1 = Xy1[:,end]
                         y2 = Xy2[:,end]
-                        impurity = _impurity_calculation(data.y, y1, y2)
+                        impurity = impurity_calculation(data.y, y1, y2)
                         if impurity > largest_impurity
                             largest_impurity = impurity
                             best_criteria = BestCriteria(feature_i, threshold)
@@ -105,7 +105,7 @@ function desition_tree(
             )
         end
         # We're at leaf => determine value
-        leaf_value = _leaf_value_calculation(data.y)
+        leaf_value = leaf_value_calculation(data.y)
         return DecisionNode(
             missing,
             missing,
@@ -149,14 +149,14 @@ function regression_tree(
     min_impurity::Float64=10^-7,
     max_depth::Int64=typemax(Int64)
     )
-    _impurity_calculation = calculate_variance_reduction
-    _leaf_value_calculation = mean_of_y
+    impurity_calculation = calculate_variance_reduction
+    leaf_value_calculation = mean_of_y
     tree_settings = TreeSettings(
         min_samples_split,
         min_impurity,
         max_depth
     )
-    desition_tree(_impurity_calculation, _leaf_value_calculation, tree_settings)
+    desition_tree(impurity_calculation, leaf_value_calculation, tree_settings)
 end
 
 function classification_tree(
@@ -164,14 +164,14 @@ function classification_tree(
     min_impurity::Float64=10^-7,
     max_depth::Int64=typemax(Int64)
     )
-    _impurity_calculation = calculate_information_gain
-    _leaf_value_calculation = majority_vote
+    impurity_calculation = calculate_information_gain
+    leaf_value_calculation = majority_vote
     tree_settings = TreeSettings(
         min_samples_split,
         min_impurity,
         max_depth
     )
-    desition_tree(_impurity_calculation, _leaf_value_calculation, tree_settings)
+    desition_tree(impurity_calculation, leaf_value_calculation, tree_settings)
 end
 
 end
