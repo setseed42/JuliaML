@@ -6,24 +6,21 @@ include("Structures.jl")
 using .ImpurityCalculations, .LeafValueCalculations, .Structures
 export regression_tree, classification_tree
 
-struct BestCriteria
+struct SplitCriteria
     feature_i::Int64
     threshold::Float64
 end
 
 struct BestSets
-    leftX::Array{Float64}
-    lefty::Array{Float64}
-    rightX::Array{Float64}
-    righty::Array{Float64}
+    left::Union{Dataset,Missing}
+    right::Union{Dataset,Missing}
 end
 
 struct DecisionNode
-    feature_i
-    threshold
-    value
-    true_branch
-    false_branch
+    criteria::Union{SplitCriteria,Missing}
+    value::Union{Array{Float64},Float64,Missing}
+    true_branch::Union{DecisionNode,Missing}
+    false_branch::Union{DecisionNode,Missing}
 end
 
 
@@ -33,12 +30,33 @@ struct TreeSettings
     max_depth::Int64
 end
 
+struct ImpurityInfo
+    impurity::Float64
+    criteria::SplitCriteria
+    sets::BestSets
+end
 
-function divide_on_feature(x::Array{Float64}, feature_i::Int64, threshold::Float64)::Tuple{Array{Float64}, Array{Float64}}
+function divide_on_feature(x::Array{Float64},
+    feature_i::Int64,
+    threshold::Float64
+    )::Tuple{Array{Float64}, Array{Float64}}
+
     split_func(sample) = sample[:,feature_i] .>= threshold
     x_1 = x[split_func(x),:]
     x_2 = x[.!split_func(x),:]
     x_1, x_2
+end
+
+function find_larger_impurity(
+    curr_impurity::ImpurityInfo,
+    prev_impurity::ImpurityInfo
+    )::ImpurityInfo
+
+    if curr_impurity.impurity > prev_impurity.impurity
+        return curr_impurity
+    else
+        return prev_impurity
+    end
 end
 
 function desition_tree(
@@ -55,59 +73,61 @@ function desition_tree(
         best_sets = missing
         Xy = hcat(data.x, data.y)
         n_samples, n_features = size(data.x)
-        if (n_samples >= tree_settings.min_samples_split) & (current_depth <= tree_settings.max_depth)
-            for feature_i = 1:n_features
-                feature_values = data.x[:,feature_i]
-                unique_values = unique(feature_values)
-                for threshold in unique_values
-                    Xy1, Xy2 = divide_on_feature(Xy, feature_i, threshold)
-                    if (size(Xy1, 1) > 0) & (size(Xy2, 1) > 0)
-                        y1 = Xy1[:,end]
-                        y2 = Xy2[:,end]
-                        impurity = impurity_calculation(data.y, y1, y2)
-                        if impurity > largest_impurity
-                            largest_impurity = impurity
-                            best_criteria = BestCriteria(feature_i, threshold)
-                            best_sets = BestSets(
-                                Xy1[:,1:n_features],
-                                Xy1[:,end],
-                                Xy2[:,1:n_features],
-                                Xy2[:,end]
-                            )
-                        end
-                    end
+
+        function calc_feature_impurity(feature_i::Int64)::ImpurityInfo
+            feature_values = data.x[:,feature_i]
+            unique_values = unique(feature_values)
+            function calc_threshold_impurity(threshold::Float64)::ImpurityInfo
+                Xy1, Xy2 = divide_on_feature(Xy, feature_i, threshold)
+                if (size(Xy1, 1) > 0) & (size(Xy2, 1) > 0)
+                    y1 = Xy1[:,end]
+                    y2 = Xy2[:,end]
+                    impurity = impurity_calculation(data.y, y1, y2)
+                    criteria = SplitCriteria(feature_i, threshold)
+                    sets = BestSets(
+                        Dataset(Xy1[:,1:n_features], y1),
+                        Dataset(Xy2[:,1:n_features], y2)
+                    )
+                else
+                    impurity = 0.
+                    criteria = SplitCriteria(feature_i, threshold)
+                    sets = BestSets(missing, missing)
                 end
+                ImpurityInfo(impurity, criteria, sets)
             end
+            mapreduce(
+                calc_threshold_impurity,
+                find_larger_impurity,
+                unique_values
+            )
+        end
+        if (n_samples >= tree_settings.min_samples_split) & (current_depth <= tree_settings.max_depth)
+            best_impurity_info = mapreduce(
+                calc_feature_impurity,
+                find_larger_impurity,
+                1:n_features
+            )
+            largest_impurity = best_impurity_info.impurity
         end
 
         if largest_impurity > tree_settings.min_impurity
-            # Build subtrees for the right and left branches
             true_branch = build_tree(
-                Dataset(
-                    best_sets.leftX,
-                    best_sets.lefty
-                ),
+                best_impurity_info.sets.left,
                 current_depth + 1
             )
             false_branch = build_tree(
-                Dataset(
-                    best_sets.rightX,
-                    best_sets.righty
-                ),
+                best_impurity_info.sets.right,
                 current_depth + 1
             )
             return DecisionNode(
-                best_criteria.feature_i,
-                best_criteria.threshold,
+                best_impurity_info.criteria,
                 missing,
                 true_branch,
                 false_branch
             )
         end
-        # We're at leaf => determine value
         leaf_value = leaf_value_calculation(data.y)
         return DecisionNode(
-            missing,
             missing,
             leaf_value,
             missing,
@@ -122,13 +142,13 @@ function desition_tree(
         if !ismissing(tree.value)
             return tree.value
         end
-        feature_value = x[tree.feature_i]
+        feature_value = x[tree.criteria.feature_i]
         branch = tree.false_branch
         feature_value_type = typeof(feature_value)
 
-        if feature_value >= tree.threshold
+        if feature_value >= tree.criteria.threshold
             branch = tree.true_branch
-        elseif feature_value == tree.threshold
+        elseif feature_value == tree.criteria.threshold
             branch = tree.true_branch
         end
         predict_value(x, branch)
