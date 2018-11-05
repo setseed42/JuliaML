@@ -1,5 +1,5 @@
 module Splitters
-export train_test_split
+export train_test_split, get_random_subset
 import ..Structures: Dataset
 using Random
 
@@ -10,7 +10,7 @@ function train_test_split(
 )::Tuple{Dataset,Dataset}
 
     n_obs = size(data.x, 1)
-    split_index = Int(floor(n_obs*split))
+    split_index = floor(Int64, n_obs*split)
     indexes = 1:n_obs
 
     if reshuffle
@@ -24,6 +24,16 @@ function train_test_split(
     y_test = data.y[test_indexes]
 
     Dataset(x_train, y_train), Dataset(x_test, y_test)
+end
+
+function get_random_subset(
+    data::Dataset,
+    subsample_size::Float64
+    )::Dataset
+    n_obs = size(data.x, 1)
+    split_ix = floor(Int64, n_obs * subsample_size)
+    indexes = shuffle(1:n_obs)[1:split_ix]
+    Dataset(data.x[indexes,:], data.y[indexes])
 end
 
 

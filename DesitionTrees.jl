@@ -1,10 +1,6 @@
 module DesitionTrees
-include("ImpurityCalculations.jl")
-include("LeafValueCalculations.jl")
-include("Structures.jl")
-
-using .ImpurityCalculations, .LeafValueCalculations, .Structures
-export regression_tree, classification_tree
+using ..ImpurityCalculations, ..LeafValueCalculations, ..Structures, ..XGBlosses
+export regression_tree, classification_tree, xgb_regression_tree, TreeSettings
 
 struct SplitCriteria
     feature_i::Int64
@@ -18,7 +14,7 @@ end
 
 struct DecisionNode
     criteria::Union{SplitCriteria,Missing}
-    value::Union{Array{Float64},Float64,Missing}
+    value::Union{Int64,Float64,Missing}
     true_branch::Union{DecisionNode,Missing}
     false_branch::Union{DecisionNode,Missing}
 end
@@ -36,15 +32,17 @@ struct ImpurityInfo
     sets::BestSets
 end
 
-function divide_on_feature(x::Array{Float64},
+function divide_on_feature(data::Dataset,
     feature_i::Int64,
     threshold::Float64
-    )::Tuple{Array{Float64}, Array{Float64}}
-
+    )::Tuple{Dataset, Dataset}
     split_func(sample) = sample[:,feature_i] .>= threshold
-    x_1 = x[split_func(x),:]
-    x_2 = x[.!split_func(x),:]
-    x_1, x_2
+    splitter = split_func(data.x)
+    x_1 = data.x[splitter,:]
+    y_1 = data.y[splitter]
+    x_2 = data.x[.!splitter,:]
+    y_2 = data.y[.!splitter]
+    Dataset(x_1, y_1), Dataset(x_2, y_2)
 end
 
 function find_larger_impurity(
@@ -62,8 +60,7 @@ end
 function desition_tree(
     impurity_calculation,
     leaf_value_calculation,
-    tree_settings = TreeSettings(2, 10^-7, typemax(Int64))::TreeSettings,
-    loss=missing
+    tree_settings::TreeSettings
     )
     root = missing
 
@@ -71,22 +68,19 @@ function desition_tree(
         largest_impurity = 0
         best_criteria = missing
         best_sets = missing
-        Xy = hcat(data.x, data.y)
         n_samples, n_features = size(data.x)
 
         function calc_feature_impurity(feature_i::Int64)::ImpurityInfo
             feature_values = data.x[:,feature_i]
             unique_values = unique(feature_values)
             function calc_threshold_impurity(threshold::Float64)::ImpurityInfo
-                Xy1, Xy2 = divide_on_feature(Xy, feature_i, threshold)
-                if (size(Xy1, 1) > 0) & (size(Xy2, 1) > 0)
-                    y1 = Xy1[:,end]
-                    y2 = Xy2[:,end]
-                    impurity = impurity_calculation(data.y, y1, y2)
+                left, right = divide_on_feature(data, feature_i, threshold)
+                if (size(left.x, 1) > 0) & (size(right.x, 1) > 0)
+                    impurity = impurity_calculation(data.y, left.y, right.y)
                     criteria = SplitCriteria(feature_i, threshold)
                     sets = BestSets(
-                        Dataset(Xy1[:,1:n_features], y1),
-                        Dataset(Xy2[:,1:n_features], y2)
+                        left,
+                        right
                     )
                 else
                     impurity = 0.
@@ -135,7 +129,7 @@ function desition_tree(
         )
     end
 
-    function predict_value(x::Array{Float64}, tree=missing)
+    function predict_value(x::Array{Float64}, tree=missing)::Union{Float64, Int64}
         if ismissing(tree)
             tree = root
         end
@@ -154,44 +148,32 @@ function desition_tree(
         predict_value(x, branch)
     end
 
-    function fit(x::Array{Float64}, y::Union{Array{Float64}, Array{Int64}}, loss=missing)
-        data = Dataset(x, y)
+    function fit(data::Dataset, loss=missing)
         root = build_tree(data)
-        predict(x::Array{Float64})::Array{Float64} = mapslices(predict_value, x, dims=2)
+        predict(x::Array{Float64}) = mapslices(predict_value, x, dims=2)[:]
         return predict
     end
     return fit
 end
 
 
-function regression_tree(
-    min_samples_split::Int64=2,
-    min_impurity::Float64=10^-7,
-    max_depth::Int64=typemax(Int64)
-    )
+function regression_tree(tree_settings::TreeSettings)
     impurity_calculation = calculate_variance_reduction
     leaf_value_calculation = mean_of_y
-    tree_settings = TreeSettings(
-        min_samples_split,
-        min_impurity,
-        max_depth
-    )
     desition_tree(impurity_calculation, leaf_value_calculation, tree_settings)
 end
 
-function classification_tree(
-    min_samples_split::Int64=2,
-    min_impurity::Float64=10^-7,
-    max_depth::Int64=typemax(Int64)
-    )
+function classification_tree(tree_settings::TreeSettings)
     impurity_calculation = calculate_information_gain
     leaf_value_calculation = majority_vote
-    tree_settings = TreeSettings(
-        min_samples_split,
-        min_impurity,
-        max_depth
-    )
     desition_tree(impurity_calculation, leaf_value_calculation, tree_settings)
 end
+
+function xgb_regression_tree(loss::XGBloss, tree_settings::TreeSettings)
+    impurity_calculation = gain_by_taylor(loss)
+    leaf_value_calculation = approximate_update(loss)
+    desition_tree(impurity_calculation, leaf_value_calculation, tree_settings)
+end
+
 
 end

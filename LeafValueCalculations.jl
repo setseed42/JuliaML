@@ -1,12 +1,13 @@
 module LeafValueCalculations
 using Statistics
-export mean_of_y, majority_vote
+import ..Structures: NumericList
+export mean_of_y, majority_vote, approximate_update
 
-function mean_of_y(y::Array{Float64})::Array{Float64}
-    mean(y, dims=1)
+function mean_of_y(y::NumericList)::Float64
+    mean(y)
 end
 
-function majority_vote(y::Array{Float64})::Float64
+function majority_vote(y::NumericList)::Union{Float64,Int64}
     most_common = missing
     max_count = 0
     for label in unique(y)
@@ -18,5 +19,21 @@ function majority_vote(y::Array{Float64})::Float64
     end
     most_common
 end
+
+function split(y)
+    col = size(y, 2) ÷ 2
+    y[:,1:col], y[:,col+1:end]
+end
+
+function approximate_update(loss)
+    function calculate_update(y)
+        y, y_pred = split(y)
+        gradient = sum(y .* loss.gradient(y, y_pred), dims=1)
+        hessian = sum(loss.hess(y, y_pred), dims=1)
+        gradient ./ hessian
+    end
+    calculate_update
+end
+
 
 end
