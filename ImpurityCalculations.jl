@@ -3,13 +3,21 @@ using Statistics
 export calculate_variance_reduction, calculate_information_gain, gain_by_taylor
 import ..Structures: NumericList
 
+function safe_var(y)
+    if length(y) == 1
+        return 0
+    else
+        return var(y)
+    end
+end
+
 function calculate_variance_reduction(
     y::NumericList,
     y1::NumericList,
     y2::NumericList)::Float64
-    var_tot = var(y)
-    var_1 = var(y1)
-    var_2 = var(y2)
+    var_tot = safe_var(y)
+    var_1 = safe_var(y1)
+    var_2 = safe_var(y2)
     frac_1 = length(y1) / length(y)
     frac_2 = length(y2) / length(y)
     var_tot - ((frac_1 * var_1) + (frac_2 * var_2))
@@ -34,7 +42,7 @@ function calculate_information_gain(
     y_entropy = calculate_entropy(y)
     y1_entropy = calculate_entropy(y1)
     y2_entropy = calculate_entropy(y2)
-    y_entropy - p * y1_entropy - (1 - p) * y2_entropy
+    y_entropy - (p * y1_entropy) - ((1 - p) * y2_entropy)
 end
 
 function split(y)

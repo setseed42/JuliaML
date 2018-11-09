@@ -32,7 +32,7 @@ function get_random_subset(
     )::Dataset
     n_obs = size(data.x, 1)
     split_ix = floor(Int64, n_obs * subsample_size)
-    indexes = shuffle(1:n_obs)[1:split_ix]
+    indexes = randperm(n_obs)[1:split_ix]
     Dataset(data.x[indexes,:], data.y[indexes])
 end
 

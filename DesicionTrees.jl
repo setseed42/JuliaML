@@ -1,4 +1,4 @@
-module DesitionTrees
+module DesicionTrees
 using ..ImpurityCalculations, ..LeafValueCalculations, ..Structures, ..XGBlosses
 export regression_tree, classification_tree, xgb_regression_tree, TreeSettings
 

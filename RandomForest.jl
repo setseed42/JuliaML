@@ -3,17 +3,17 @@ include("Structures.jl")
 include("ImpurityCalculations.jl")
 include("LeafValueCalculations.jl")
 include("XGBlosses.jl")
-include("DesitionTrees.jl")
+include("DesicionTrees.jl")
 include("Splitters.jl")
 
 using Random, StatsBase, Statistics
-using .DesitionTrees, .Structures, .Splitters, .ImpurityCalculations, .LeafValueCalculations, .XGBlosses
+using .DesicionTrees, .Structures, .Splitters, .ImpurityCalculations, .LeafValueCalculations, .XGBlosses
 export random_forest_classifiction, random_forest_regression, desition_tree_classification
 
 
 struct FittedEstimator
     fitted_estimator
-    feature_indexes
+    feature_indexes::Array{Int64}
 end
 
 function random_forest(
@@ -23,7 +23,6 @@ function random_forest(
     feature_sample=missing::Union{Missing,Float64},
     subsample_size::Float64=0.5
     )
-
     function fit(x, y)
         data = Dataset(x, y)
         n_features = size(data.x, 2)
@@ -33,27 +32,27 @@ function random_forest(
         else
             max_features = floor(Int64, n_features * feature_sample)
         end
-
-        function fit_estimator()::FittedEstimator
+        fitted_estimators = Array{FittedEstimator}(undef, n_estimators)
+        for i in 1:n_estimators
             subset = get_random_subset(data, subsample_size)
-            feature_indexes = shuffle(1:n_features)[1:max_features]
+            feature_indexes = randperm(n_features)[1:max_features]
+            print("Feature indexes for $i, $feature_indexes")
+            #feature_indexes = 1:max_features
             bagged_x = subset.x[:,feature_indexes]
-            fitted_estimator = estimator(Dataset(bagged_x, subset.y))
-            FittedEstimator(fitted_estimator, feature_indexes)
-        end
-
-        fitted_estimators = map(x -> fit_estimator(), 1:n_estimators)
-        function predict_estimator(x, fitted_estimator::FittedEstimator)
-            bagged_x = x[:, fitted_estimator.feature_indexes]
-            y_pred = fitted_estimator.fitted_estimator(bagged_x)
-            y_pred
+            fitted_estimators[i] = FittedEstimator(
+                estimator(Dataset(bagged_x, subset.y)),
+                feature_indexes
+            )
         end
 
         function predict(x)
-            y_pred = zeros(size(x, 1), length(fitted_estimators))
-            for (i, estimator) in enumerate(fitted_estimators)
-                y_pred[:,i] = predict_estimator(x, estimator)
+            y_pred = Array{Union{Int64,Float64}}(undef, size(x, 1), length(fitted_estimators))
+            for (i, fitted_estimator) in enumerate(fitted_estimators)
+                feature_indexes = fitted_estimator.feature_indexes
+                bagged_x = x[:, feature_indexes]
+                y_pred[:,i] = fitted_estimator.fitted_estimator(bagged_x)
             end
+            println(y_pred)
             mapslices(predict_summary, y_pred, dims=2)[:]
         end
         predict
@@ -76,7 +75,7 @@ function random_forest_classifiction(
     )
     estimator = classification_tree(tree_settings)
     random_forest(
-        mode,
+        majority_vote,
         estimator,
         n_estimators,
         feature_sample,
@@ -107,7 +106,7 @@ function random_forest_regression(
     )
 end
 
-function desition_tree_classification(
+function desicion_tree_classification(
     min_samples_split::Int64=2,
     min_impurity::Float64=10^-7,
     max_depth::Int64=typemax(Int64),
@@ -118,6 +117,24 @@ function desition_tree_classification(
         max_depth
     )
     model = classification_tree(tree_settings)
+    function train(x, y)
+        data = Dataset(x, y)
+        model(data)
+    end
+    train
+end
+
+function desicion_tree_regression(
+    min_samples_split::Int64=2,
+    min_impurity::Float64=10^-7,
+    max_depth::Int64=typemax(Int64),
+    )
+    tree_settings = TreeSettings(
+        min_samples_split,
+        min_impurity,
+        max_depth
+    )
+    model = regression_tree(tree_settings)
     function train(x, y)
         data = Dataset(x, y)
         model(data)

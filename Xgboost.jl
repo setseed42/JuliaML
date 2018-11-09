@@ -4,9 +4,9 @@ include("Structures.jl")
 include("ImpurityCalculations.jl")
 include("LeafValueCalculations.jl")
 include("XGBlosses.jl")
-include("DesitionTrees.jl")
+include("DesicionTrees.jl")
 
-using .DesitionTrees, .XGBlosses
+using .DesicionTrees, .XGBlosses
 export regression_tree, classification_tree, xgboost, TreeSettings
 
 function xgboost(
